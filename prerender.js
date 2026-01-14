@@ -281,8 +281,8 @@ async function uploadToKV(pagePath, html, kvNamespaceId) {
 
   try {
     const cmd = kvNamespaceId
-      ? `npx wrangler kv:key put --namespace-id="${kvNamespaceId}" "${key}" --path="${tempFile}"`
-      : `npx wrangler kv:key put --binding="${CONFIG.kvNamespace}" "${key}" --path="${tempFile}"`;
+      ? `npx wrangler kv key put "${key}" --namespace-id="${kvNamespaceId}" --path="${tempFile}"`
+      : `npx wrangler kv key put "${key}" --binding="${CONFIG.kvNamespace}" --path="${tempFile}"`;
 
     execSync(cmd, { stdio: "pipe" });
     console.log(`  Uploaded to KV: ${key}`);
