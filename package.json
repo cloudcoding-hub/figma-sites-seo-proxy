@@ -1,0 +1,24 @@
+{
+  "name": "figma-seo-proxy",
+  "version": "1.0.0",
+  "description": "SEO proxy for Figma Sites with server-side bot detection",
+  "main": "worker.js",
+  "scripts": {
+    "prerender": "node prerender.js",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "kv:create": "wrangler kv:namespace create PRERENDER_CACHE",
+    "kv:list": "wrangler kv:key list --binding=PRERENDER_CACHE",
+    "tail": "wrangler tail"
+  },
+  "dependencies": {
+    "puppeteer": "^24.32.0"
+  },
+  "devDependencies": {
+    "dotenv": "^17.2.3",
+    "wrangler": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
