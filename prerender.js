@@ -330,8 +330,8 @@ ${urls.join("\n")}
     await fs.writeFile(tempFile, sitemap, "utf-8");
     try {
       const cmd = kvNamespaceId
-        ? `npx wrangler kv:key put --namespace-id="${kvNamespaceId}" "/sitemap.xml" --path="${tempFile}"`
-        : `npx wrangler kv:key put --binding="${CONFIG.kvNamespace}" "/sitemap.xml" --path="${tempFile}"`;
+        ? `npx wrangler kv key put "/sitemap.xml" --namespace-id="${kvNamespaceId}" --path="${tempFile}"`
+        : `npx wrangler kv key put "/sitemap.xml" --binding="${CONFIG.kvNamespace}" --path="${tempFile}"`;
       execSync(cmd, { stdio: "pipe" });
       console.log(`  Uploaded to KV: /sitemap.xml`);
     } finally {
@@ -373,8 +373,8 @@ Allow: /
     await fs.writeFile(tempFile, robotsTxt, "utf-8");
     try {
       const cmd = kvNamespaceId
-        ? `npx wrangler kv:key put --namespace-id="${kvNamespaceId}" "/robots.txt" --path="${tempFile}"`
-        : `npx wrangler kv:key put --binding="${CONFIG.kvNamespace}" "/robots.txt" --path="${tempFile}"`;
+        ? `npx wrangler kv key put "/robots.txt" --namespace-id="${kvNamespaceId}" --path="${tempFile}"`
+        : `npx wrangler kv key put "/robots.txt" --binding="${CONFIG.kvNamespace}" --path="${tempFile}"`;
       execSync(cmd, { stdio: "pipe" });
       console.log(`  Uploaded to KV: /robots.txt`);
     } finally {
