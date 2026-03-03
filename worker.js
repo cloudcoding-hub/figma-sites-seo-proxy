@@ -24,6 +24,9 @@ const CONFIG = {
   figmaSiteOrigin: "https://web.yourdomain.com", // Fallback only
   mainDomain: "https://yourdomain.com", // Fallback only
   debug: false, // Fallback only
+  bigCalEnabled: false, // Fallback only
+  bigCalOrigin: "https://web-bigcal.yourdomain.com", // Fallback only
+  bigCalDomain: "https://bigcal.yourdomain.com", // Fallback only
 };
 
 // Helper to get config - reads from .env (via wrangler env injection)
@@ -32,6 +35,9 @@ function getConfig(env) {
     figmaSiteOrigin: env.FIGMA_SITE_URL || CONFIG.figmaSiteOrigin,
     mainDomain: env.MAIN_DOMAIN || CONFIG.mainDomain,
     debug: env.DEBUG === "true" || CONFIG.debug,
+    bigCalEnabled: env.BIGCAL_ENABLED === "true" || CONFIG.bigCalEnabled,
+    bigCalOrigin: env.BIGCAL_FIGMA_URL || CONFIG.bigCalOrigin,
+    bigCalDomain: env.BIGCAL_SITE_URL || CONFIG.bigCalDomain,
   };
 }
 
@@ -211,26 +217,10 @@ function rewriteHtml(html, config) {
   const figmaHost = new URL(config.figmaSiteOrigin).host;
   const mainHost = new URL(config.mainDomain).host;
 
-  // Replace all occurrences of the Figma subdomain
-  // Handle both http and https, with and without www
-  const patterns = [
-    // Full URLs
-    new RegExp(`https?://${escapeRegex(figmaHost)}`, "gi"),
-    // Protocol-relative URLs
-    new RegExp(`//${escapeRegex(figmaHost)}`, "gi"),
-    // Just the hostname in various contexts
-    new RegExp(
-      `(href|src|action|data-[^=]*)(=["'])([^"']*)(${escapeRegex(
-        figmaHost
-      )})([^"']*)`,
-      "gi"
-    ),
-  ];
-
   // Simple replacement for full URLs
   html = html.replace(
-    new RegExp(escapeRegex(CONFIG.figmaSiteOrigin), "gi"),
-    CONFIG.mainDomain
+    new RegExp(escapeRegex(config.figmaSiteOrigin), "gi"),
+    config.mainDomain
   );
 
   // Also handle the host without protocol
@@ -278,6 +268,49 @@ export default {
       return proxyToFigmaSites(request, pathname, config);
     }
 
+    // BigCal feature toggle: route /bigcal/* paths to the BigCal Figma origin
+    const isBigCalPath = pathname === "/bigcal" || pathname.startsWith("/bigcal/");
+    if (isBigCalPath) {
+      if (!config.bigCalEnabled) {
+        // Feature is disabled - redirect to main site
+        return Response.redirect(config.mainDomain, 302);
+      }
+      // Route to BigCal Figma origin using a BigCal-scoped config
+      const bigCalConfig = {
+        figmaSiteOrigin: config.bigCalOrigin,
+        mainDomain: config.bigCalDomain,
+        debug: config.debug,
+      };
+      const botDetectedBigCal = isBot(request);
+      if (botDetectedBigCal) {
+        const prerendered = await getPrerenderedContent(pathname, env);
+        if (prerendered) {
+          const cachedResponse = new Response(prerendered, {
+            headers: {
+              "content-type": "text/html; charset=utf-8",
+              "cache-control": "public, max-age=3600",
+            },
+          });
+          if (config.debug) {
+            cachedResponse.headers.set("x-served-by", "prerender-cache");
+            cachedResponse.headers.set("x-bot-detected", "true");
+            cachedResponse.headers.set("x-bigcal", "true");
+          }
+          return cachedResponse;
+        }
+        console.log(`No prerendered content for BigCal ${pathname}, falling back to Figma`);
+      }
+      const bigCalResponse = await proxyToFigmaSites(request, pathname, bigCalConfig);
+      if (config.debug) {
+        const newBigCalResponse = new Response(bigCalResponse.body, bigCalResponse);
+        newBigCalResponse.headers.set("x-served-by", "figma-proxy");
+        newBigCalResponse.headers.set("x-bot-detected", botDetectedBigCal ? "true" : "false");
+        newBigCalResponse.headers.set("x-bigcal", "true");
+        return newBigCalResponse;
+      }
+      return bigCalResponse;
+    }
+
     // Check if request is from a bot
     const botDetected = isBot(request);
 
@@ -294,7 +327,7 @@ export default {
         });
 
         // Add debug header if enabled
-        if (CONFIG.debug) {
+        if (config.debug) {
           response.headers.set("x-served-by", "prerender-cache");
           response.headers.set("x-bot-detected", "true");
         }
@@ -310,10 +343,10 @@ export default {
     }
 
     // Human visitor (or bot without pre-rendered content) - proxy to Figma
-    const response = await proxyToFigmaSites(request, pathname);
+    const response = await proxyToFigmaSites(request, pathname, config);
 
     // Add debug headers if enabled
-    if (CONFIG.debug) {
+    if (config.debug) {
       const newResponse = new Response(response.body, response);
       newResponse.headers.set("x-served-by", "figma-proxy");
       newResponse.headers.set("x-bot-detected", botDetected ? "true" : "false");

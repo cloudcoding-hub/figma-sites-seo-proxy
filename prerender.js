@@ -34,6 +34,13 @@ const CONFIG = {
     // Add more pages as needed
   ],
 
+  // BigCal pages to render (rendered when BIGCAL_FIGMA_URL is set)
+  bigCalPages: [
+    "/bigcal",
+    "/bigcal/trial",
+    "/bigcal/marketing",
+  ],
+
   // Rendering options
   viewport: { width: 1280, height: 800 },
   waitUntil: "networkidle2",
@@ -57,6 +64,8 @@ function parseArgs() {
     pages: null,
     skipUpload: false, // Skip KV upload (just generate files)
     kvNamespaceId: process.env.KV_NAMESPACE_ID || null, // Default from .env
+    bigCalFigmaUrl: process.env.BIGCAL_FIGMA_URL || null, // BigCal Figma URL from .env
+    bigCalCanonical: process.env.BIGCAL_SITE_URL || null, // BigCal canonical domain from .env
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -83,6 +92,12 @@ function parseArgs() {
       case "--kv-namespace-id":
         options.kvNamespaceId = args[++i];
         break;
+      case "--bigcal-figma-url":
+        options.bigCalFigmaUrl = args[++i];
+        break;
+      case "--bigcal-canonical":
+        options.bigCalCanonical = args[++i];
+        break;
       case "--help":
       case "-h":
         printHelp();
@@ -108,11 +123,13 @@ Required (or set in .env):
   -c, --canonical      Main domain for canonical tags (e.g., https://yourdomain.com)
 
 Options:
-  -o, --output         Local output directory (default: ./dist)
-  -p, --pages          Comma-separated list of pages (default: /)
-  --skip-upload        Generate files locally but don't upload to KV
-  --kv-namespace-id    Override KV namespace ID from wrangler.toml
-  -h, --help           Show this help message
+  -o, --output             Local output directory (default: ./dist)
+  -p, --pages              Comma-separated list of pages (default: /)
+  --skip-upload            Generate files locally but don't upload to KV
+  --kv-namespace-id        Override KV namespace ID from wrangler.toml
+  --bigcal-figma-url       BigCal Figma Sites subdomain (enables BigCal page pre-rendering)
+  --bigcal-canonical       BigCal canonical domain (e.g., https://bigcal.yourdomain.com)
+  -h, --help               Show this help message
 
 Examples:
   # Basic usage
@@ -125,6 +142,13 @@ Examples:
     --figma-url https://web.yourdomain.com \
     --canonical https://yourdomain.com \
     --pages /,/about,/pricing,/contact
+
+  # With BigCal pages
+  node prerender.js \
+    --figma-url https://web.yourdomain.com \
+    --canonical https://yourdomain.com \
+    --bigcal-figma-url https://web-bigcal.yourdomain.com \
+    --bigcal-canonical https://bigcal.yourdomain.com
 
   # Local only (no KV upload)
   node prerender.js \
@@ -402,6 +426,12 @@ async function main() {
   if (!options.canonical.startsWith("http")) {
     options.canonical = "https://" + options.canonical;
   }
+  if (options.bigCalFigmaUrl && !options.bigCalFigmaUrl.startsWith("http")) {
+    options.bigCalFigmaUrl = "https://" + options.bigCalFigmaUrl;
+  }
+  if (options.bigCalCanonical && !options.bigCalCanonical.startsWith("http")) {
+    options.bigCalCanonical = "https://" + options.bigCalCanonical;
+  }
 
   const pages = options.pages || CONFIG.pages;
 
@@ -410,6 +440,10 @@ async function main() {
   console.log(`Canonical:  ${options.canonical}`);
   console.log(`Output:     ${options.output}`);
   console.log(`Pages:      ${pages.join(", ")}`);
+  if (options.bigCalFigmaUrl) {
+    console.log(`BigCal URL: ${options.bigCalFigmaUrl}`);
+    console.log(`BigCal Pages: ${CONFIG.bigCalPages.join(", ")}`);
+  }
   console.log(`KV Upload:  ${options.skipUpload ? "Disabled" : "Enabled"}\n`);
 
   // Check wrangler is available if uploading
@@ -460,6 +494,39 @@ async function main() {
         results.push({ path: pagePath, success: true });
       } else {
         results.push({ path: pagePath, success: false, error: result.error });
+      }
+    }
+
+    // Render BigCal pages if a BigCal Figma URL is configured
+    if (options.bigCalFigmaUrl) {
+      const bigCalCanonical = options.bigCalCanonical || options.canonical;
+      if (!options.bigCalCanonical) {
+        console.warn(
+          "Warning: --bigcal-canonical (BIGCAL_SITE_URL) is not set. " +
+          "Falling back to main canonical URL for BigCal pages. " +
+          "Set BIGCAL_SITE_URL in .env to avoid incorrect canonical tags on BigCal pages."
+        );
+      }
+      console.log("\nRendering BigCal pages...");
+      for (const pagePath of CONFIG.bigCalPages) {
+        const result = await renderPage(
+          browser,
+          options.bigCalFigmaUrl,
+          bigCalCanonical,
+          pagePath
+        );
+
+        if (result.success) {
+          await saveLocal(options.output, pagePath, result.html);
+
+          if (!options.skipUpload) {
+            await uploadToKV(pagePath, result.html, options.kvNamespaceId);
+          }
+
+          results.push({ path: pagePath, success: true });
+        } else {
+          results.push({ path: pagePath, success: false, error: result.error });
+        }
       }
     }
 

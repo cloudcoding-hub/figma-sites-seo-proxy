@@ -24,6 +24,11 @@ id = ""  # ← Paste your KV namespace ID here (get from: npx wrangler kv:namesp
 [vars]
 # These will be populated from your .env file when you run wrangler commands
 # No need to edit this section - just update your .env file
+#
+# BigCal feature toggle variables (set in .env):
+#   BIGCAL_ENABLED      - Set to "true" to enable /bigcal/* routing
+#   BIGCAL_FIGMA_URL    - Figma Sites subdomain for BigCal pages
+#   BIGCAL_SITE_URL     - Canonical domain for BigCal (e.g., https://bigcal.yourdomain.com)
 
 # Custom domain routes
 # Configure via Cloudflare dashboard: Workers & Pages → your worker → Settings → Triggers
